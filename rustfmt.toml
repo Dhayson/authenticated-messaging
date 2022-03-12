@@ -1,0 +1,5 @@
+#https://github.com/rust-lang/rustfmt/blob/master/Configurations.md#control_brace_style
+unstable_features = true
+brace_style = "AlwaysNextLine"
+control_brace_style = "AlwaysNextLine"
+struct_lit_single_line = false
