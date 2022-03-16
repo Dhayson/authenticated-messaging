@@ -1,22 +1,30 @@
+#[allow(unused_imports)]
+use bytes::Bytes;
 use mini_redis::{client, Result};
+#[allow(unused_imports)]
 use tokio::{select, time};
+
+#[path = "../src/connection.rs"]
+mod connection;
+use connection::Connection;
 
 #[tokio::main]
 async fn main() -> Result<()>
 {
     let hello = "hello";
+
     // Open a connection to the mini-redis address.
-    let mut client = client::connect("192.168.1.129:6379").await.unwrap();
+    let client = client::connect("192.168.1.129:6379").await.unwrap();
+    let con = Connection::new(client).await;
     println!("connected");
-    //let mut client = client::connect("0.0.0.0:6379").await?;
-    client.set(hello, "sima".into()).await?;
-    loop
-    {
-        select! {
-            // Print every 3 secs if nothing happens
-            _ = time::sleep(time::Duration::from_secs_f32(3f32)) =>{
-                println!("got value from the server; result={:?}", client.get(hello).await);
-            }
-        };
-    }
+
+    let con2 = con.clone();
+    let con3 = con2.clone();
+    tokio::spawn(async move {
+        con3.set("Lol".to_string(), "yasuone".into()).await.unwrap();
+        con3.get("Lol".to_string()).await.unwrap();
+    })
+    .await
+    .ok();
+    Ok(())
 }
