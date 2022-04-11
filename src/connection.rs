@@ -21,12 +21,12 @@ pub enum Actions
     },
 }
 
-pub struct Connection
+pub struct WrapClient
 {
     sender: SenderMpsc<Actions>,
 }
 
-impl Clone for Connection
+impl Clone for WrapClient
 {
     fn clone(&self) -> Self
     {
@@ -36,9 +36,9 @@ impl Clone for Connection
     }
 }
 
-impl Connection
+impl WrapClient
 {
-    pub async fn with_buffer(mut client: Client, buffer: usize) -> Connection
+    pub async fn with_buffer(mut client: Client, buffer: usize) -> WrapClient
     {
         let (sender, mut receiver) = mpsc::channel::<Actions>(buffer);
         tokio::spawn(async move {
@@ -51,9 +51,9 @@ impl Connection
                         sender,
                     } =>
                     {
-                        println!("getting value in key {}", key);
-                        let value = client.get(&key).await;
-                        sender.send(value).unwrap();
+                        let value_res = client.get(&key).await;
+                        println!("getting value {:?} in key {}", value_res, key);
+                        sender.send(value_res).unwrap();
                     }
                     Actions::Set {
                         key,
@@ -62,20 +62,20 @@ impl Connection
                     } =>
                     {
                         println!("setting value {:?} in key {}", value, key);
-                        let value = client.set(&key, value).await;
-                        sender.send(value).unwrap();
+                        let res = client.set(&key, value).await;
+                        sender.send(res).unwrap();
                     }
                 };
             }
         });
-        Connection {
+        WrapClient {
             sender,
         }
     }
 
-    pub async fn new(client: Client) -> Connection
+    pub async fn new(client: Client) -> WrapClient
     {
-        Connection::with_buffer(client, 32).await
+        WrapClient::with_buffer(client, 32).await
     }
 
     pub async fn get(

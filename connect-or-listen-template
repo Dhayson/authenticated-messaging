@@ -1,0 +1,29 @@
+/*
+let stream = select! {
+
+        val = {
+            async {
+                let mut res = TcpStream::connect(add).await;
+                while res.is_err()
+                {
+                    time::sleep(time::Duration::from_secs(3)).await;
+                    res = TcpStream::connect(add).await;
+                }
+                res
+            }
+        } => {
+            println!("connect completed first with {:?}", val);
+            val.unwrap()
+        }
+
+        val = {
+            let socket_listen = TcpSocket::new_v4().unwrap();
+            socket_listen.bind(add2).ok();
+            listen = socket_listen.listen(1024).unwrap();
+            listen.accept()
+        } => {
+            println!("listen completed first with {:?}", val);
+            val.unwrap().0
+        }
+    };
+    */

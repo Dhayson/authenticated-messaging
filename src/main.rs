@@ -1,76 +1,41 @@
-use bytes::Bytes;
-//#[allow(unused_imports)]
-use mini_redis::{Connection, Frame};
-use std::collections::HashMap;
-use std::sync::{Arc, Mutex};
-use tokio::net::{TcpListener, TcpStream};
-type Database = Arc<Mutex<HashMap<String, Bytes>>>;
+//#![allow(unused)]
+use encryption::Key;
+use mini_redis::Result;
+use rsa::pkcs1::DecodeRsaPrivateKey;
+use rsa::RsaPrivateKey;
+use std::fs;
+use std::net::SocketAddr;
+use tokio::net::TcpListener;
+
+pub(crate) mod encryption;
+pub(crate) mod frame;
+mod log;
 
 #[tokio::main]
-async fn main()
+async fn main() -> Result<()>
 {
-    // Bind the listener to the address
-    let listener = TcpListener::bind("192.168.1.129:6379").await.unwrap();
+    let add_listen: SocketAddr = "192.168.1.129:8080".parse().unwrap();
 
-    let arc = Arc::new(Mutex::new(HashMap::new()));
+    let listen = TcpListener::bind(add_listen).await?;
 
-    loop
+    let priv_key = fs::read_to_string("private.pem").unwrap();
+    let priv_key = RsaPrivateKey::from_pkcs1_pem(&priv_key).unwrap();
+
+    while let Ok((stream, _addr)) = listen.accept().await
     {
-        // The second item contains the IP and port of the new connection.
-        let (socket, address) = listener.accept().await.unwrap();
-        println!("{:?}", address);
-        let db = arc.clone();
-
+        log::log(
+            log::Level::Info,
+            &format!("listen completed with {:?}\n", stream),
+        );
+        let priv_key = priv_key.clone();
         tokio::spawn(async move {
-            process(socket, db).await;
+            let mut con = frame::Connection::new(stream, Key::Private(priv_key));
+            loop
+            {
+                let res = con.read_frame().await.unwrap();
+                log::log(log::Level::Info, &format!("received frame -> {:?}", res));
+            }
         });
     }
-}
-
-async fn process(socket: TcpStream, db: Database)
-{
-    use mini_redis::Command::{self, Get, Set};
-
-    // Connection, provided by `mini-redis`, handles parsing frames from
-    // the socket
-    let mut connection = Connection::new(socket);
-
-    // Use `read_frame` to receive a command from the connection.
-    while let Some(frame) = connection.read_frame().await.unwrap()
-    {
-        let response;
-
-        {
-            let mut db = db.lock().unwrap();
-            response = match Command::from_frame(frame).unwrap()
-            {
-                Set(cmd) =>
-                {
-                    // The value is stored as `Vec<u8>`
-                    db.insert(cmd.key().to_string(), cmd.value().clone());
-                    println!("set key {:?} to {:?}", cmd.key(), cmd.value());
-                    Frame::Simple("OK".to_string())
-                }
-                Get(cmd) =>
-                {
-                    if let Some(value) = db.get(cmd.key())
-                    {
-                        // `Frame::Bulk` expects data to be of type `Bytes`. This
-                        // type will be covered later in the tutorial. For now,
-                        // `&Vec<u8>` is converted to `Bytes` using `into()`.
-                        println!("got value {:?} in key {:?}", value, cmd.key());
-                        Frame::Bulk(value.clone().into())
-                    }
-                    else
-                    {
-                        Frame::Null
-                    }
-                }
-                cmd => panic!("unimplemented {:?}", cmd),
-            };
-        }
-
-        // Write the response to the client
-        connection.write_frame(&response).await.unwrap();
-    }
+    Ok(())
 }
