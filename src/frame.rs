@@ -6,12 +6,14 @@ use tokio::net::TcpStream;
 
 use super::encryption::Key;
 use super::log::{log, Level};
+use super::message::Message;
 
 #[derive(Debug, Deserialize, Serialize)]
 pub enum Frame
 {
     String(String),
     Vec(Vec<Frame>),
+    Message(Message),
 }
 
 pub struct Connection
@@ -35,14 +37,14 @@ impl Connection
     /// Read a frame from the connection.
     ///
     /// Returns `None` if EOF is reached
-    pub async fn read_frame(&mut self) -> Result<Option<Frame>>
+    pub async fn read_frame(&mut self) -> Result<Frame>
     {
         loop
         {
             //try get frame from buffer
             if let Some(frame) = self.parse_frame()
             {
-                return Ok(Some(frame));
+                return Ok(frame);
             }
 
             self.stream.readable().await?;

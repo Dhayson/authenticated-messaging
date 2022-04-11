@@ -9,7 +9,8 @@ use tokio::net::TcpListener;
 
 pub(crate) mod encryption;
 pub(crate) mod frame;
-mod log;
+pub(crate) mod log;
+pub(crate) mod message;
 
 #[tokio::main]
 async fn main() -> Result<()>
@@ -33,9 +34,28 @@ async fn main() -> Result<()>
             loop
             {
                 let res = con.read_frame().await.unwrap();
-                log::log(log::Level::Info, &format!("received frame -> {:?}", res));
+                frame_handler(res);
             }
         });
     }
     Ok(())
+}
+
+fn frame_handler(frame: frame::Frame)
+{
+    match frame
+    {
+        frame::Frame::String(s) =>
+        {
+            log::log(log::Level::Normal, &format!("received string: {}", s));
+        }
+        frame::Frame::Vec(vec) =>
+        {
+            for frame in vec
+            {
+                frame_handler(frame);
+            }
+        }
+        frame::Frame::Message(m) => m.write_to_file().unwrap(),
+    };
 }

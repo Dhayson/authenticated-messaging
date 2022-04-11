@@ -9,12 +9,13 @@ use tokio::net::TcpStream;
 mod main;
 use main::encryption;
 use main::frame;
+use main::message::Message;
 
 #[tokio::main]
 async fn main() -> Result<()>
 {
     //std::env::set_var("RUST_BACKTRACE", "1");
-    let local_network = false;
+    let local_network = true;
 
     let add_connect: SocketAddr = if local_network
     {
@@ -36,14 +37,17 @@ async fn main() -> Result<()>
     let mut con = frame::Connection::new(stream, encryption::Key::Public(key));
     loop
     {
-        let mut buf_vec = vec![];
-        for i in 0..3
-        {
-            let mut buf = String::new();
-            stdin().read_line(&mut buf).unwrap();
-            buf_vec.push(frame::Frame::String(buf));
-        }
-        println!("{:?}", con.write_frame(&frame::Frame::Vec(buf_vec)).await?);
+        let mut buf = String::new();
+        stdin().read_line(&mut buf).unwrap();
+        println!(
+            "{:?}",
+            con.write_frame(&frame::Frame::Message(Message::new(
+                "mensg".to_string(),
+                "dhay2".to_string(),
+                buf
+            )))
+            .await?
+        );
     }
     /*
     let mut stream = TcpStream::connect("127.0.0.1:6142").await?;
