@@ -1,22 +1,22 @@
 use rsa::{errors::Error, PaddingScheme, PublicKey, RsaPrivateKey, RsaPublicKey};
 
-pub enum Key
+pub enum RsaKey
 {
     Private(RsaPrivateKey),
     Public(RsaPublicKey),
 }
 
-impl Key
+impl RsaKey
 {
     pub fn encrypt(&self, msg: &[u8]) -> Vec<u8>
     {
         let mut rng = rand::thread_rng();
         match self
         {
-            Key::Private(key) => key
+            RsaKey::Private(key) => key
                 .encrypt(&mut rng, PaddingScheme::new_pkcs1v15_encrypt(), msg)
                 .unwrap(),
-            Key::Public(key) => key
+            RsaKey::Public(key) => key
                 .encrypt(&mut rng, PaddingScheme::new_pkcs1v15_encrypt(), msg)
                 .unwrap(),
         }
@@ -26,8 +26,8 @@ impl Key
     {
         match self
         {
-            Key::Private(key) => key.decrypt(PaddingScheme::new_pkcs1v15_encrypt(), cypher),
-            Key::Public(_) => Err(Error::Decryption),
+            RsaKey::Private(key) => key.decrypt(PaddingScheme::new_pkcs1v15_encrypt(), cypher),
+            RsaKey::Public(_) => Err(Error::Decryption),
         }
     }
 }

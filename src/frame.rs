@@ -4,7 +4,7 @@ use std::io::{Error, ErrorKind};
 use tokio::io::Result;
 use tokio::net::TcpStream;
 
-use super::encryption::Key;
+use super::encryption::RsaKey;
 use super::log::{log, Level};
 use super::message::Message;
 
@@ -20,12 +20,12 @@ pub struct Connection
 {
     stream: TcpStream,
     buffer: BytesMut,
-    key: Key, // ... other fields here
+    key: RsaKey, // ... other fields here
 }
 
 impl Connection
 {
-    pub fn new(stream: TcpStream, key: Key) -> Connection
+    pub fn new(stream: TcpStream, key: RsaKey) -> Connection
     {
         Connection {
             stream,
@@ -69,7 +69,7 @@ impl Connection
     {
         let parse_frame = ron::to_string(frame).unwrap();
 
-        let parse_frame_encrypted = Key::encrypt(&self.key, parse_frame.as_bytes());
+        let parse_frame_encrypted = RsaKey::encrypt(&self.key, parse_frame.as_bytes());
 
         //there's a better solution. This is only needed because the write buffer has
         //to end with '\0' with the current logic
@@ -127,7 +127,7 @@ impl Connection
 
         let frame = &ron::from_str::<Vec<u8>>(&String::from_utf8_lossy(&frame)).ok()?; //wrong parse
 
-        let frame = Key::decrypt(&self.key, frame).ok()?; //wrong encryption
+        let frame = RsaKey::decrypt(&self.key, frame).ok()?; //wrong encryption
 
         self.buffer.advance(frame_len);
         //returns none if frame is invalid

@@ -34,7 +34,7 @@ async fn main() -> Result<()>
     let key =
         rsa::RsaPublicKey::from_pkcs1_pem(&fs::read_to_string("public.pem").unwrap()).unwrap();
 
-    let mut con = frame::Connection::new(stream, encryption::Key::Public(key));
+    let mut con = frame::Connection::new(stream, encryption::RsaKey::Public(key));
     loop
     {
         let mut buf = String::new();

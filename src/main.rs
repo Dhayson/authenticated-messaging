@@ -1,5 +1,5 @@
 //#![allow(unused)]
-use encryption::Key;
+use encryption::RsaKey;
 use mini_redis::Result;
 use rsa::pkcs1::DecodeRsaPrivateKey;
 use rsa::RsaPrivateKey;
@@ -30,7 +30,7 @@ async fn main() -> Result<()>
         );
         let priv_key = priv_key.clone();
         tokio::spawn(async move {
-            let mut con = frame::Connection::new(stream, Key::Private(priv_key));
+            let mut con = frame::Connection::new(stream, RsaKey::Private(priv_key));
             loop
             {
                 let res = con.read_frame().await.unwrap();
