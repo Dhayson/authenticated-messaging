@@ -4,7 +4,7 @@ use std::io::{Error, ErrorKind};
 use tokio::io::Result;
 use tokio::net::TcpStream;
 
-use super::encryption::RsaKey;
+use super::encryption::{self, RsaKey};
 use super::log::{log, Level};
 use super::message::Message;
 
@@ -69,7 +69,11 @@ impl Connection
     {
         let parse_frame = ron::to_string(frame).unwrap();
 
-        let parse_frame_encrypted = RsaKey::encrypt(&self.key, parse_frame.as_bytes());
+        let parse_frame_encrypted = match encryption::encrypt(&self.key, parse_frame.as_bytes())
+        {
+            Ok(result) => result,
+            Err(err) => panic!("could not encrypt the frame with respective key"),
+        };
 
         //there's a better solution. This is only needed because the write buffer has
         //to end with '\0' with the current logic
@@ -125,12 +129,18 @@ impl Connection
 
         let (frame, _) = self.buffer.chunk().split_at(frame_len - 1);
 
-        let frame = &ron::from_str::<Vec<u8>>(&String::from_utf8_lossy(&frame)).ok()?; //wrong parse
+        let res = (|| {
+            let frame =
+                &ron::from_str::<(Vec<u8>, Vec<u8>)>(&String::from_utf8_lossy(&frame)).ok()?; //wrong parse
 
-        let frame = RsaKey::decrypt(&self.key, frame).ok()?; //wrong encryption
+            let frame = encryption::decrypt(&self.key, &frame.0, &frame.1).ok()?; //wrong encryption
+
+            ron::from_str(&String::from_utf8_lossy(&frame)).ok() //invalid frame
+        })();
 
         self.buffer.advance(frame_len);
-        //returns none if frame is invalid
-        return ron::from_str(&String::from_utf8_lossy(&frame)).ok(); //invalid frame
+
+        return res;
+        //NOTE: returns none if frame is invalid
     }
 }

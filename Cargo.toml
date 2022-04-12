@@ -13,3 +13,4 @@ serde = { version = "1.0", features = ["derive"] }
 ron = "0.7"
 rsa = "0.6.0"
 rand = "0.8.5"
+aes-gcm = "0.9.4"

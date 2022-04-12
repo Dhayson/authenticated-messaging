@@ -5,7 +5,7 @@ use std::os::unix::fs::OpenOptionsExt;
 fn main()
 {
     let mut rng = rand::thread_rng();
-    let bits = 4096;
+    let bits = 512;
     let priv_key = RsaPrivateKey::new(&mut rng, bits).expect("failed to generate a key");
     let pub_key = RsaPublicKey::from(&priv_key);
     let mut options = OpenOptions::new();
