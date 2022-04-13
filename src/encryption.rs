@@ -61,7 +61,7 @@ impl From<aes_gcm::Error> for EncryptionErrors
 /// First Vec<u8> is the encrypted key
 ///
 /// Second one is the encrypted text
-pub fn encrypt(rsa_key: &RsaKey, msg: &[u8]) -> Result<(Vec<u8>, Vec<u8>), EncryptionErrors>
+pub fn aes_encrypt(rsa_key: &RsaKey, msg: &[u8]) -> Result<(Vec<u8>, Vec<u8>), EncryptionErrors>
 {
     let random_key = rand::thread_rng().gen::<[u8; 32]>();
     //println!("key used: {:?}", random_key);
@@ -73,7 +73,7 @@ pub fn encrypt(rsa_key: &RsaKey, msg: &[u8]) -> Result<(Vec<u8>, Vec<u8>), Encry
     // NOTE: handle these errors to avoid panics!
 }
 
-pub fn decrypt(
+pub fn aes_decrypt(
     rsa_key: &RsaKey,
     encrypted_aes_key: &Vec<u8>,
     ciphertext: &Vec<u8>,

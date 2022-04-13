@@ -69,7 +69,7 @@ impl Connection
     {
         let parse_frame = ron::to_string(frame).unwrap();
 
-        let parse_frame_encrypted = match encryption::encrypt(&self.key, parse_frame.as_bytes())
+        let parse_frame_encrypted = match encryption::aes_encrypt(&self.key, parse_frame.as_bytes())
         {
             Ok(result) => result,
             Err(err) => panic!("could not encrypt the frame with respective key"),
@@ -133,7 +133,7 @@ impl Connection
             let frame =
                 &ron::from_str::<(Vec<u8>, Vec<u8>)>(&String::from_utf8_lossy(&frame)).ok()?; //wrong parse
 
-            let frame = encryption::decrypt(&self.key, &frame.0, &frame.1).ok()?; //wrong encryption
+            let frame = encryption::aes_decrypt(&self.key, &frame.0, &frame.1).ok()?; //wrong encryption
 
             ron::from_str(&String::from_utf8_lossy(&frame)).ok() //invalid frame
         })();

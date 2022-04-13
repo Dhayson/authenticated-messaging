@@ -1,5 +1,6 @@
 use mini_redis::Result;
 use rsa::pkcs1::DecodeRsaPublicKey;
+use std::env;
 use std::fs;
 use std::io::stdin;
 use std::net::SocketAddr;
@@ -14,7 +15,8 @@ use main::message::Message;
 #[tokio::main]
 async fn main() -> Result<()>
 {
-    //std::env::set_var("RUST_BACKTRACE", "1");
+    let args: Vec<String> = env::args().collect();
+    //env::set_var("RUST_BACKTRACE", "1");
     let local_network = true;
 
     let add_connect: SocketAddr = if local_network
@@ -42,8 +44,8 @@ async fn main() -> Result<()>
         println!(
             "{:?}",
             con.write_frame(&frame::Frame::Message(Message::new(
-                "mensg".to_string(),
-                "dhay2".to_string(),
+                "mensg.txt".to_string(),
+                args[1].to_string(),
                 buf
             )))
             .await?
