@@ -34,35 +34,6 @@ impl Connection
             key,
         }
     }
-    /// Read a frame from the connection.
-    ///
-    /// Returns `None` if EOF is reached
-    pub async fn read_frame(&mut self) -> Result<Frame>
-    {
-        loop
-        {
-            //try get frame from buffer
-            if let Some(frame) = self.parse_frame()
-            {
-                return Ok(frame);
-            }
-
-            self.stream.readable().await?;
-            match self.stream.try_read_buf(&mut self.buffer)
-            {
-                Ok(0) => return Err(Error::from(ErrorKind::ConnectionReset)),
-
-                Ok(_) => log(
-                    Level::Debug,
-                    &format!("current buffer: {}", String::from_utf8_lossy(&self.buffer)),
-                ),
-
-                Err(error) if error.kind() == ErrorKind::WouldBlock => continue,
-
-                Err(error) => unimplemented!("{:?}", error),
-            };
-        }
-    }
 
     /// Write a frame to the connection.
     pub async fn write_frame(&mut self, frame: &Frame) -> Result<()>
@@ -103,6 +74,35 @@ impl Connection
         }
         Ok(())
         // implementation here
+    }
+    /// Read a frame from the connection.
+    ///
+    /// Returns `None` if EOF is reached
+    pub async fn read_frame(&mut self) -> Result<Frame>
+    {
+        loop
+        {
+            //try get frame from buffer
+            if let Some(frame) = self.parse_frame()
+            {
+                return Ok(frame);
+            }
+
+            self.stream.readable().await?;
+            match self.stream.try_read_buf(&mut self.buffer)
+            {
+                Ok(0) => return Err(Error::from(ErrorKind::ConnectionReset)),
+
+                Ok(_) => log(
+                    Level::Debug,
+                    &format!("current buffer: {}", String::from_utf8_lossy(&self.buffer)),
+                ),
+
+                Err(error) if error.kind() == ErrorKind::WouldBlock => continue,
+
+                Err(error) => unimplemented!("{:?}", error),
+            };
+        }
     }
 
     fn parse_frame(&mut self) -> Option<Frame>
