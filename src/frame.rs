@@ -4,9 +4,14 @@ use std::io::{Error, ErrorKind};
 use tokio::io::Result;
 use tokio::net::TcpStream;
 
-use super::encryption::{self, RsaKey};
+use super::encryption::{self, RsaKey, SignVerify};
 use super::log::{log, Level};
 use super::message::Message;
+
+use k256::ecdsa::{
+    signature::{Signer, Verifier},
+    Signature,
+};
 
 #[derive(Debug, Deserialize, Serialize)]
 pub enum Frame
@@ -20,18 +25,20 @@ pub struct Connection
 {
     stream: TcpStream,
     buffer: BytesMut,
-    key: RsaKey, // ... other fields here
+    key: RsaKey,
+    dig_sign: SignVerify, // ... other fields here
 }
 
 impl Connection
 {
-    pub fn new(stream: TcpStream, key: RsaKey) -> Connection
+    pub fn new(stream: TcpStream, key: RsaKey, dig_sign: SignVerify) -> Connection
     {
         Connection {
             stream,
             // Allocate the buffer with 4kb of capacity.
             buffer: BytesMut::with_capacity(4096),
             key,
+            dig_sign,
         }
     }
 
@@ -46,9 +53,22 @@ impl Connection
             Err(err) => panic!("could not encrypt the frame with respective key"),
         };
 
+        let parse_frame_signature: Signature = match &self.dig_sign
+        {
+            SignVerify::Sign(signer) => signer.sign(parse_frame.as_bytes()),
+            SignVerify::Verify(_) => todo!(),
+            SignVerify::Both(signer, _) => signer.sign(parse_frame.as_bytes()),
+        };
+
+        let parse_frame_encrypted_signed = (
+            parse_frame_encrypted.0,
+            parse_frame_encrypted.1,
+            parse_frame_signature,
+        );
+
         //there's a better solution. This is only needed because the write buffer has
         //to end with '\0' with the current logic
-        let final_buf = ron::to_string(&parse_frame_encrypted).unwrap() + "\0";
+        let final_buf = ron::to_string(&parse_frame_encrypted_signed).unwrap() + "\0";
 
         loop
         {
@@ -130,10 +150,22 @@ impl Connection
         let (frame, _) = self.buffer.chunk().split_at(frame_len - 1);
 
         let res = (|| {
-            let frame =
-                &ron::from_str::<(Vec<u8>, Vec<u8>)>(&String::from_utf8_lossy(&frame)).ok()?; //wrong parse
+            let frame_signed =
+                &ron::from_str::<(Vec<u8>, Vec<u8>, Signature)>(&String::from_utf8_lossy(&frame))
+                    .ok()?; //wrong parse
 
-            let frame = encryption::aes_decrypt(&self.key, &frame.0, &frame.1).ok()?; //wrong encryption
+            let frame =
+                encryption::aes_decrypt(&self.key, &frame_signed.0, &frame_signed.1).ok()?; //wrong encryption
+
+            let signature = frame_signed.2;
+
+            match self.dig_sign
+            {
+                SignVerify::Sign(_) => todo!(),
+                SignVerify::Verify(ver) => ver.verify(&frame, &signature),
+                SignVerify::Both(_, ver) => ver.verify(&frame, &signature),
+            }
+            .ok()?; //cannot validate
 
             ron::from_str(&String::from_utf8_lossy(&frame)).ok() //invalid frame
         })();
@@ -143,4 +175,6 @@ impl Connection
         return res;
         //NOTE: returns none if frame is invalid
     }
+    //TODO: create, transmit and use session id.
+    pub fn authenticate() {}
 }

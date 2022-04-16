@@ -3,10 +3,19 @@ use aes_gcm::{Aes256Gcm, Key, Nonce};
 use rand::{self, Rng};
 use rsa::{errors::Error as RsaError, PaddingScheme, PublicKey, RsaPrivateKey, RsaPublicKey};
 
+use k256::ecdsa::{SigningKey, VerifyingKey};
+
 pub enum RsaKey
 {
     Private(RsaPrivateKey),
     Public(RsaPublicKey),
+}
+
+pub enum SignVerify
+{
+    Sign(SigningKey),
+    Verify(VerifyingKey),
+    Both(SigningKey, VerifyingKey),
 }
 
 impl RsaKey
@@ -58,7 +67,7 @@ impl From<aes_gcm::Error> for EncryptionErrors
         Self::Aes(err)
     }
 }
-/// First Vec<u8> is the encrypted key
+/// First Vec<u8> is the encrypted aes key
 ///
 /// Second one is the encrypted text
 pub fn aes_encrypt(rsa_key: &RsaKey, msg: &[u8]) -> Result<(Vec<u8>, Vec<u8>), EncryptionErrors>
@@ -87,4 +96,14 @@ pub fn aes_decrypt(
 
     Ok(cipher.decrypt(nonce, ciphertext.as_ref())?)
     // NOTE: handle this error to avoid panics!
+}
+
+pub fn get_sign_key(path: &str) -> Option<SigningKey>
+{
+    SigningKey::from_bytes(&std::fs::read(path).ok()?).ok()
+}
+
+pub fn get_verify_key(path: &str) -> Option<VerifyingKey>
+{
+    VerifyingKey::from_sec1_bytes(&std::fs::read(path).ok()?).ok()
 }

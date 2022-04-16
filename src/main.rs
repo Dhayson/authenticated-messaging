@@ -1,5 +1,5 @@
 //#![allow(unused)]
-use encryption::RsaKey;
+use encryption::{RsaKey, SignVerify};
 use mini_redis::Result;
 use rsa::pkcs1::DecodeRsaPrivateKey;
 use rsa::RsaPrivateKey;
@@ -30,7 +30,11 @@ async fn main() -> Result<()>
         );
         let priv_key = priv_key.clone();
         tokio::spawn(async move {
-            let mut con = frame::Connection::new(stream, RsaKey::Private(priv_key));
+            let mut con = frame::Connection::new(
+                stream,
+                RsaKey::Private(priv_key),
+                SignVerify::Verify(encryption::get_verify_key("key.verify").unwrap()),
+            );
             loop
             {
                 let res = con.read_frame().await.unwrap();

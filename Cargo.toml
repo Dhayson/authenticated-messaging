@@ -14,3 +14,4 @@ ron = "0.7"
 rsa = "0.6.0"
 rand = "0.8.5"
 aes-gcm = "0.9.4"
+k256 = {version ="0.10.4", features = ["serde","ecdsa"]} #not audited!
