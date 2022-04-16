@@ -58,6 +58,7 @@ impl Connection
             SignVerify::Sign(signer) => signer.sign(parse_frame.as_bytes()),
             SignVerify::Verify(_) => panic!("cannot sign with verify key"),
             SignVerify::Both(signer, _) => signer.sign(parse_frame.as_bytes()),
+            SignVerify::MultiVerify(_) => panic!("cannot sign with verify key"),
         };
 
         let parse_frame_encrypted_signed = (
@@ -159,11 +160,26 @@ impl Connection
 
             let signature = frame_signed.2;
 
-            match self.dig_sign
+            match &self.dig_sign
             {
                 SignVerify::Sign(_) => panic!("cannot verify with signer key"),
                 SignVerify::Verify(ver) => ver.verify(&frame, &signature),
                 SignVerify::Both(_, ver) => ver.verify(&frame, &signature),
+                SignVerify::MultiVerify(ver_vec) =>
+                {
+                    let mut res = Err(k256::ecdsa::signature::Error::new());
+                    //TODO: lazy iteration, because it's usually the same value in the vec
+                    //that's used in a connection
+                    for ver in ver_vec
+                    {
+                        res = ver.verify(&frame, &signature);
+                        if res.is_ok()
+                        {
+                            break;
+                        }
+                    }
+                    res
+                }
             }
             .ok()?; //cannot validate
 

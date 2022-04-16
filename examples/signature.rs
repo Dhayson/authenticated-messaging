@@ -22,7 +22,7 @@ fn main()
         let verify_bytes = verify_key.to_bytes();
         fs::write("key.verify", verify_bytes).unwrap();
     }
-
+    /*
     {
         // Signing
         let signing_key = SigningKey::random(thread_rng());
@@ -33,6 +33,7 @@ fn main()
         let verify_bytes = verify_key.to_bytes();
         fs::write("key.verify3", verify_bytes).unwrap();
     }
+    */
 
     let signature: Signature;
 

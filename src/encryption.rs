@@ -15,6 +15,7 @@ pub enum SignVerify
 {
     Sign(SigningKey),
     Verify(VerifyingKey),
+    MultiVerify(Vec<VerifyingKey>),
     Both(SigningKey, VerifyingKey),
 }
 
@@ -98,12 +99,31 @@ pub fn aes_decrypt(
     // NOTE: handle this error to avoid panics!
 }
 
-pub fn get_sign_key(path: &str) -> Option<SigningKey>
+pub fn get_sign_key<P>(path: P) -> Option<SigningKey>
+where
+    P: AsRef<std::path::Path>,
 {
     SigningKey::from_bytes(&std::fs::read(path).ok()?).ok()
 }
 
-pub fn get_verify_key(path: &str) -> Option<VerifyingKey>
+pub fn get_verify_key<P>(path: P) -> Option<VerifyingKey>
+where
+    P: AsRef<std::path::Path>,
 {
     VerifyingKey::from_sec1_bytes(&std::fs::read(path).ok()?).ok()
+}
+
+pub fn get_verify_keys<P>(path_vec: &[P]) -> Vec<VerifyingKey>
+where
+    P: AsRef<std::path::Path>,
+{
+    let mut res = Vec::new();
+    for path in path_vec
+    {
+        if let Some(key) = get_verify_key(path)
+        {
+            res.push(key);
+        }
+    }
+    res
 }
