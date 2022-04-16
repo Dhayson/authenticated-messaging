@@ -56,7 +56,7 @@ impl Connection
         let parse_frame_signature: Signature = match &self.dig_sign
         {
             SignVerify::Sign(signer) => signer.sign(parse_frame.as_bytes()),
-            SignVerify::Verify(_) => todo!(),
+            SignVerify::Verify(_) => panic!("cannot sign with verify key"),
             SignVerify::Both(signer, _) => signer.sign(parse_frame.as_bytes()),
         };
 
@@ -161,7 +161,7 @@ impl Connection
 
             match self.dig_sign
             {
-                SignVerify::Sign(_) => todo!(),
+                SignVerify::Sign(_) => panic!("cannot verify with signer key"),
                 SignVerify::Verify(ver) => ver.verify(&frame, &signature),
                 SignVerify::Both(_, ver) => ver.verify(&frame, &signature),
             }
