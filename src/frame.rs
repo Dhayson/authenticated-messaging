@@ -1,6 +1,8 @@
 use bytes::{Buf, BytesMut};
 use serde::{self, Deserialize, Serialize};
 use std::io::{Error, ErrorKind};
+use std::sync::atomic::AtomicPtr;
+
 use tokio::io::Result;
 use tokio::net::TcpStream;
 
@@ -41,13 +43,17 @@ impl Connection
             dig_sign,
         }
     }
-
     /// Write a frame to the connection.
-    pub async fn write_frame(&mut self, frame: &Frame) -> Result<()>
+    pub async fn write_frame(&self, frame: &Frame) -> Result<()>
+    {
+        self.write_frame_with_key(frame, &self.key).await
+    }
+
+    async fn write_frame_with_key(&self, frame: &Frame, key: &RsaKey) -> Result<()>
     {
         let parse_frame = ron::to_string(frame).unwrap();
 
-        let parse_frame_encrypted = match encryption::aes_encrypt(&self.key, parse_frame.as_bytes())
+        let parse_frame_encrypted = match encryption::aes_encrypt(key, parse_frame.as_bytes())
         {
             Ok(result) => result,
             Err(err) => panic!("could not encrypt the frame with respective key"),
@@ -101,10 +107,23 @@ impl Connection
     /// Returns `None` if EOF is reached
     pub async fn read_frame(&mut self) -> Result<Frame>
     {
+        let key_ptr = AtomicPtr::new(&mut self.key);
+        let key;
+        //override the borrow checker, so it's possible to use &mut self and &self.key
+        //it's fine because self.key is never mutated here
+        unsafe {
+            key = &*key_ptr.into_inner();
+        }
+
+        self.read_frame_with_key(key).await
+    }
+
+    async fn read_frame_with_key(&mut self, key: &RsaKey) -> Result<Frame>
+    {
         loop
         {
             //try get frame from buffer
-            if let Some(frame) = self.parse_frame()
+            if let Some(frame) = self.parse_frame(key)
             {
                 return Ok(frame);
             }
@@ -121,12 +140,12 @@ impl Connection
 
                 Err(error) if error.kind() == ErrorKind::WouldBlock => continue,
 
-                Err(error) => unimplemented!("{:?}", error),
+                Err(error) => return Err(error),
             };
         }
     }
 
-    fn parse_frame(&mut self) -> Option<Frame>
+    fn parse_frame(&mut self, key: &RsaKey) -> Option<Frame>
     {
         let mut frame_len = None;
         let mut index = 0;
@@ -155,8 +174,7 @@ impl Connection
                 &ron::from_str::<(Vec<u8>, Vec<u8>, Signature)>(&String::from_utf8_lossy(&frame))
                     .ok()?; //wrong parse
 
-            let frame =
-                encryption::aes_decrypt(&self.key, &frame_signed.0, &frame_signed.1).ok()?; //wrong encryption
+            let frame = encryption::aes_decrypt(key, &frame_signed.0, &frame_signed.1).ok()?; //wrong encryption
 
             let signature = frame_signed.2;
 
