@@ -55,32 +55,45 @@ async fn main() -> Result<()>
                 stream,
                 RsaKey::Private(priv_key),
                 SignVerify::MultiVerify(keys),
-            );
+            )
+            .authenticate(frame::Auth::Host)
+            .await
+            .unwrap();
+
             loop
             {
                 let res = con.read_frame().await.unwrap();
-                frame_handler(res);
+                frame_handler(res, &con);
             }
         });
     }
     Ok(())
 }
 
-fn frame_handler(frame: frame::Frame)
+fn frame_handler(frame: frame::Frame, con: &frame::Connection)
 {
     match frame
     {
-        frame::Frame::String(s) =>
+        frame::Frame::String(s, _) =>
         {
             log::log(log::Level::Normal, &format!("received string: {}", s));
         }
-        frame::Frame::Vec(vec) =>
+        frame::Frame::Vec(vec, _) =>
         {
             for frame in vec
             {
-                frame_handler(frame);
+                frame_handler(frame, con);
             }
         }
-        frame::Frame::Message(m) => m.write_to_file().unwrap(),
+        frame::Frame::Message(m, sig) =>
+        {
+            m.write_to_file().unwrap();
+            log::log(
+                log::Level::Info,
+                &format!("signature is {:?} / status {}", sig, sig == con.session_id),
+            );
+        }
+        frame::Frame::KeyShare(_) => panic!("element only used for authentication"),
+        frame::Frame::SessionId(_) => panic!("element only used for authentication"),
     };
 }

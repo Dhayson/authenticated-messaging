@@ -41,18 +41,21 @@ async fn main() -> Result<()>
         stream,
         encryption::RsaKey::Public(key),
         encryption::SignVerify::Sign(encryption::get_sign_key("key.sign").unwrap()),
-    );
+    )
+    .authenticate(frame::Auth::Client)
+    .await
+    .unwrap();
+
     loop
     {
         let mut buf = String::new();
         stdin().read_line(&mut buf).unwrap();
         println!(
             "{:?}",
-            con.write_frame(&frame::Frame::Message(Message::new(
-                "mensg.txt".to_string(),
-                args[1].to_string(),
-                buf
-            )))
+            con.write_frame(&frame::Frame::Message(
+                Message::new("mensg.txt".to_string(), args[1].to_string(), buf),
+                con.session_id
+            ))
             .await?
         );
     }

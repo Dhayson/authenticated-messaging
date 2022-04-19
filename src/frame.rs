@@ -1,4 +1,5 @@
 use bytes::{Buf, BytesMut};
+use rand::Rng;
 use serde::{self, Deserialize, Serialize};
 use std::io::{Error, ErrorKind};
 use std::sync::atomic::AtomicPtr;
@@ -10,6 +11,8 @@ use super::encryption::{self, RsaKey, SignVerify};
 use super::log::{log, Level};
 use super::message::Message;
 
+type SessionId = Option<i128>;
+
 use k256::ecdsa::{
     signature::{Signer, Verifier},
     Signature,
@@ -18,9 +21,11 @@ use k256::ecdsa::{
 #[derive(Debug, Deserialize, Serialize)]
 pub enum Frame
 {
-    String(String),
-    Vec(Vec<Frame>),
-    Message(Message),
+    String(String, SessionId),
+    Vec(Vec<Frame>, SessionId),
+    Message(Message, SessionId),
+    KeyShare(String),
+    SessionId(SessionId),
 }
 
 pub struct Connection
@@ -28,7 +33,8 @@ pub struct Connection
     stream: TcpStream,
     buffer: BytesMut,
     key: RsaKey,
-    dig_sign: SignVerify, // ... other fields here
+    dig_sign: SignVerify,
+    pub session_id: SessionId, // ... other fields here
 }
 
 impl Connection
@@ -41,15 +47,16 @@ impl Connection
             buffer: BytesMut::with_capacity(4096),
             key,
             dig_sign,
+            session_id: None,
         }
     }
     /// Write a frame to the connection.
     pub async fn write_frame(&self, frame: &Frame) -> Result<()>
     {
-        self.write_frame_with_key(frame, &self.key).await
+        self.write_frame_with_key(frame, &self.key, true).await
     }
 
-    async fn write_frame_with_key(&self, frame: &Frame, key: &RsaKey) -> Result<()>
+    async fn write_frame_with_key(&self, frame: &Frame, key: &RsaKey, sign: bool) -> Result<()>
     {
         let parse_frame = ron::to_string(frame).unwrap();
 
@@ -59,13 +66,21 @@ impl Connection
             Err(err) => panic!("could not encrypt the frame with respective key"),
         };
 
-        let parse_frame_signature: Signature = match &self.dig_sign
+        let parse_frame_signature: Option<Signature>;
+        if sign
         {
-            SignVerify::Sign(signer) => signer.sign(parse_frame.as_bytes()),
-            SignVerify::Verify(_) => panic!("cannot sign with verify key"),
-            SignVerify::Both(signer, _) => signer.sign(parse_frame.as_bytes()),
-            SignVerify::MultiVerify(_) => panic!("cannot sign with verify key"),
-        };
+            parse_frame_signature = match &self.dig_sign
+            {
+                SignVerify::Sign(signer) => Some(signer.sign(parse_frame.as_bytes())),
+                SignVerify::Verify(_) => panic!("cannot sign with verify key"),
+                SignVerify::Both(signer, _) => Some(signer.sign(parse_frame.as_bytes())),
+                SignVerify::MultiVerify(_) => panic!("cannot sign with verify key"),
+            };
+        }
+        else
+        {
+            parse_frame_signature = None;
+        }
 
         let parse_frame_encrypted_signed = (
             parse_frame_encrypted.0,
@@ -115,15 +130,15 @@ impl Connection
             key = &*key_ptr.into_inner();
         }
 
-        self.read_frame_with_key(key).await
+        self.read_frame_with_key(key, true).await
     }
 
-    async fn read_frame_with_key(&mut self, key: &RsaKey) -> Result<Frame>
+    async fn read_frame_with_key(&mut self, key: &RsaKey, signed: bool) -> Result<Frame>
     {
         loop
         {
             //try get frame from buffer
-            if let Some(frame) = self.parse_frame(key)
+            if let Some(frame) = self.parse_frame(key, signed)
             {
                 return Ok(frame);
             }
@@ -145,7 +160,7 @@ impl Connection
         }
     }
 
-    fn parse_frame(&mut self, key: &RsaKey) -> Option<Frame>
+    fn parse_frame(&mut self, key: &RsaKey, signed: bool) -> Option<Frame>
     {
         let mut frame_len = None;
         let mut index = 0;
@@ -170,36 +185,39 @@ impl Connection
         let (frame, _) = self.buffer.chunk().split_at(frame_len - 1);
 
         let res = (|| {
-            let frame_signed =
-                &ron::from_str::<(Vec<u8>, Vec<u8>, Signature)>(&String::from_utf8_lossy(&frame))
-                    .ok()?; //wrong parse
+            let frame_signed = &ron::from_str::<(Vec<u8>, Vec<u8>, Option<Signature>)>(
+                &String::from_utf8_lossy(&frame),
+            )
+            .ok()?; //wrong parse
 
             let frame = encryption::aes_decrypt(key, &frame_signed.0, &frame_signed.1).ok()?; //wrong encryption
 
-            let signature = frame_signed.2;
-
-            match &self.dig_sign
+            if signed
             {
-                SignVerify::Sign(_) => panic!("cannot verify with signer key"),
-                SignVerify::Verify(ver) => ver.verify(&frame, &signature),
-                SignVerify::Both(_, ver) => ver.verify(&frame, &signature),
-                SignVerify::MultiVerify(ver_vec) =>
+                let signature = frame_signed.2?;
+                match &self.dig_sign
                 {
-                    let mut res = Err(k256::ecdsa::signature::Error::new());
-                    //TODO: lazy iteration, because it's usually the same value in the vec
-                    //that's used in a connection
-                    for ver in ver_vec
+                    SignVerify::Sign(_) => panic!("cannot verify with signer key"),
+                    SignVerify::Verify(ver) => ver.verify(&frame, &signature),
+                    SignVerify::Both(_, ver) => ver.verify(&frame, &signature),
+                    SignVerify::MultiVerify(ver_vec) =>
                     {
-                        res = ver.verify(&frame, &signature);
-                        if res.is_ok()
+                        let mut res = Err(k256::ecdsa::signature::Error::new());
+                        //TODO: lazy iteration, because it's usually the same value in the vec
+                        //that's used in a connection
+                        for ver in ver_vec
                         {
-                            break;
+                            res = ver.verify(&frame, &signature);
+                            if res.is_ok()
+                            {
+                                break;
+                            }
                         }
+                        res
                     }
-                    res
                 }
+                .ok()?; //cannot validate
             }
-            .ok()?; //cannot validate
 
             ron::from_str(&String::from_utf8_lossy(&frame)).ok() //invalid frame
         })();
@@ -209,6 +227,82 @@ impl Connection
         return res;
         //NOTE: returns none if frame is invalid
     }
-    //TODO: create, transmit and use session id.
-    pub fn authenticate() {}
+
+    pub async fn authenticate(mut self, auth: Auth) -> Result<Self>
+    {
+        match auth
+        {
+            Auth::Client =>
+            {
+                let rsa_priv_key;
+                let pub_key_string;
+                {
+                    //create a private rsa key.
+                    let mut rng = rand::thread_rng();
+                    let bits = 512;
+                    let priv_key =
+                        rsa::RsaPrivateKey::new(&mut rng, bits).expect("failed to generate a key");
+
+                    //generate public key
+                    let pub_key = rsa::RsaPublicKey::from(&priv_key);
+                    pub_key_string = rsa::pkcs1::EncodeRsaPublicKey::to_pkcs1_pem(
+                        &pub_key,
+                        rsa::pkcs8::LineEnding::LF,
+                    )
+                    .unwrap();
+
+                    rsa_priv_key = RsaKey::Private(priv_key);
+                }
+
+                //write frame with respective public key (KeyShare)
+                self.write_frame(&Frame::KeyShare(pub_key_string)).await?;
+
+                //read frame using created private rsa (SessionId) signed = false
+                let id = match Connection::read_frame_with_key(&mut self, &rsa_priv_key, false)
+                    .await?
+                {
+                    Frame::String(_, _) => todo!(),
+                    Frame::Vec(_, _) => todo!(),
+                    Frame::Message(_, _) => todo!(),
+                    Frame::KeyShare(_) => todo!(),
+                    Frame::SessionId(id) => id,
+                };
+
+                //set session id
+                self.session_id = id;
+
+                Ok(self)
+            }
+            Auth::Host =>
+            {
+                //generate a random session id
+                let id = rand::thread_rng().gen();
+                self.session_id = Some(id);
+                //read frame (KeyShare) signed = true
+                let key = match self.read_frame().await?
+                {
+                    Frame::String(_, _) => todo!(),
+                    Frame::Vec(_, _) => todo!(),
+                    Frame::Message(_, _) => todo!(),
+                    Frame::KeyShare(key) => key,
+                    Frame::SessionId(_) => todo!(),
+                };
+                let key =
+                    <rsa::RsaPublicKey as rsa::pkcs1::DecodeRsaPublicKey>::from_pkcs1_pem(&key)
+                        .unwrap();
+
+                //write frame using the KeyShare key (SessionId) signed = false
+                self.write_frame_with_key(&Frame::SessionId(Some(id)), &RsaKey::Public(key), false)
+                    .await?;
+
+                Ok(self)
+            }
+        }
+    }
+}
+
+pub enum Auth
+{
+    Client,
+    Host,
 }
