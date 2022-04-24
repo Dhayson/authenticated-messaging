@@ -1,6 +1,5 @@
 //#![allow(unused)]
 use encryption::{RsaKey, SignVerify};
-use mini_redis::Result;
 use rsa::pkcs1::DecodeRsaPrivateKey;
 use rsa::RsaPrivateKey;
 use std::fs;
@@ -13,18 +12,18 @@ pub(crate) mod log;
 pub(crate) mod message;
 
 #[tokio::main]
-async fn main() -> Result<()>
+async fn main()
 {
     let add_listen: SocketAddr = "192.168.1.129:8080".parse().unwrap();
 
-    let listen = TcpListener::bind(add_listen).await?;
+    let listen = TcpListener::bind(add_listen).await.unwrap();
 
     let priv_key = fs::read_to_string("private.pem").unwrap();
     let priv_key = RsaPrivateKey::from_pkcs1_pem(&priv_key).unwrap();
 
     let mut key_ver_list = Vec::new();
 
-    for path in fs::read_dir(".")?
+    for path in fs::read_dir(".").unwrap()
     {
         if let Ok(entry) = path
         {
@@ -67,7 +66,6 @@ async fn main() -> Result<()>
             }
         });
     }
-    Ok(())
 }
 
 fn frame_handler(frame: frame::Frame, con: &frame::Connection)

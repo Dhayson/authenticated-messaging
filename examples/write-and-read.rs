@@ -1,4 +1,3 @@
-use mini_redis::Result;
 use rsa::pkcs1::DecodeRsaPublicKey;
 use std::env;
 use std::fs;
@@ -13,7 +12,7 @@ use main::frame;
 use main::message::Message;
 
 #[tokio::main]
-async fn main() -> Result<()>
+async fn main()
 {
     let args: Vec<String> = env::args().collect();
     //env::set_var("RUST_BACKTRACE", "1");
@@ -56,7 +55,8 @@ async fn main() -> Result<()>
                 Message::new("mensg.txt".to_string(), args[1].to_string(), buf),
                 con.session_id
             ))
-            .await?
+            .await
+            .unwrap()
         );
     }
     /*
