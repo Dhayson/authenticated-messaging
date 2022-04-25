@@ -51,10 +51,11 @@ async fn main()
         stdin().read_line(&mut buf).unwrap();
         println!(
             "{:?}",
-            con.write_frame(&frame::Frame::Message(
-                Message::new("mensg.txt".to_string(), args[1].to_string(), buf),
-                con.session_id
-            ))
+            con.write_frame(frame::Frame::Message(Message::new(
+                "mensg.txt".to_string(),
+                args[1].to_string(),
+                buf
+            )))
             .await
             .unwrap()
         );

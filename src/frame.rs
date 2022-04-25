@@ -19,13 +19,34 @@ use k256::ecdsa::{
 };
 
 #[derive(Debug, Deserialize, Serialize)]
-pub enum Frame
+enum FrameComplete
 {
     String(String, SessionId),
     Vec(Vec<Frame>, SessionId),
     Message(Message, SessionId),
     KeyShare(String),
     SessionId(SessionId),
+}
+
+#[derive(Debug, Deserialize, Serialize)]
+pub enum Frame
+{
+    String(String),
+    Vec(Vec<Frame>),
+    Message(Message),
+}
+
+impl Frame
+{
+    fn to_complete(self, id: SessionId) -> FrameComplete
+    {
+        match self
+        {
+            Frame::String(s) => FrameComplete::String(s, id),
+            Frame::Vec(v) => FrameComplete::Vec(v, id),
+            Frame::Message(m) => FrameComplete::Message(m, id),
+        }
+    }
 }
 
 pub struct Connection
@@ -51,12 +72,18 @@ impl Connection
         }
     }
     /// Write a frame to the connection.
-    pub async fn write_frame(&self, frame: &Frame) -> Result<()>
+    pub async fn write_frame(&self, frame: Frame) -> Result<()>
     {
-        self.write_frame_with_key(frame, &self.key, true).await
+        let frame: FrameComplete = frame.to_complete(self.session_id);
+        self.write_frame_with_key(&frame, &self.key, true).await
     }
 
-    async fn write_frame_with_key(&self, frame: &Frame, key: &RsaKey, sign: bool) -> Result<()>
+    async fn write_frame_with_key(
+        &self,
+        frame: &FrameComplete,
+        key: &RsaKey,
+        sign: bool,
+    ) -> Result<()>
     {
         let parse_frame = ron::to_string(frame).unwrap();
 
@@ -120,7 +147,9 @@ impl Connection
     /// Read a frame from the connection.
     ///
     /// Returns `None` if EOF is reached
-    pub async fn read_frame(&mut self) -> Result<Frame>
+    ///
+    /// boolean is true if message is authenticated
+    pub async fn read_frame(&mut self) -> (Result<Frame>, bool)
     {
         let key_ptr = AtomicPtr::new(&mut self.key);
         let key;
@@ -130,10 +159,30 @@ impl Connection
             key = &*key_ptr.into_inner();
         }
 
-        self.read_frame_with_key(key, true).await
+        match self.read_frame_with_key(key, true).await
+        {
+            Ok(ok) => match ok
+            {
+                FrameComplete::String(s, id) =>
+                {
+                    (Ok(Frame::String(s)), id.is_some() && id == self.session_id)
+                }
+                FrameComplete::Vec(v, id) =>
+                {
+                    (Ok(Frame::Vec(v)), id.is_some() && id == self.session_id)
+                }
+                FrameComplete::Message(m, id) =>
+                {
+                    (Ok(Frame::Message(m)), id.is_some() && id == self.session_id)
+                }
+                FrameComplete::KeyShare(_) => panic!("element only used for authentication"),
+                FrameComplete::SessionId(_) => panic!("element only used for authentication"),
+            },
+            Err(err) => (Err(err), false),
+        }
     }
 
-    async fn read_frame_with_key(&mut self, key: &RsaKey, signed: bool) -> Result<Frame>
+    async fn read_frame_with_key(&mut self, key: &RsaKey, signed: bool) -> Result<FrameComplete>
     {
         loop
         {
@@ -160,7 +209,7 @@ impl Connection
         }
     }
 
-    fn parse_frame(&mut self, key: &RsaKey, signed: bool) -> Option<Frame>
+    fn parse_frame(&mut self, key: &RsaKey, signed: bool) -> Option<FrameComplete>
     {
         let mut frame_len = None;
         let mut index = 0;
@@ -255,17 +304,22 @@ impl Connection
                 }
 
                 //write frame with respective public key (KeyShare)
-                self.write_frame(&Frame::KeyShare(pub_key_string)).await?;
+                self.write_frame_with_key(
+                    &FrameComplete::KeyShare(pub_key_string),
+                    &self.key,
+                    true,
+                )
+                .await?;
 
                 //read frame using created private rsa (SessionId) signed = false
                 let id = match Connection::read_frame_with_key(&mut self, &rsa_priv_key, false)
                     .await?
                 {
-                    Frame::String(_, _) => todo!(),
-                    Frame::Vec(_, _) => todo!(),
-                    Frame::Message(_, _) => todo!(),
-                    Frame::KeyShare(_) => todo!(),
-                    Frame::SessionId(id) => id,
+                    FrameComplete::String(_, _) => todo!(),
+                    FrameComplete::Vec(_, _) => todo!(),
+                    FrameComplete::Message(_, _) => todo!(),
+                    FrameComplete::KeyShare(_) => todo!(),
+                    FrameComplete::SessionId(id) => id,
                 };
 
                 //set session id
@@ -278,22 +332,27 @@ impl Connection
                 //generate a random session id
                 let id = rand::thread_rng().gen();
                 self.session_id = Some(id);
+
                 //read frame (KeyShare) signed = true
-                let key = match self.read_frame().await?
+                let key = match self.read_frame_with_key(&self.key.clone(), true).await?
                 {
-                    Frame::String(_, _) => todo!(),
-                    Frame::Vec(_, _) => todo!(),
-                    Frame::Message(_, _) => todo!(),
-                    Frame::KeyShare(key) => key,
-                    Frame::SessionId(_) => todo!(),
+                    FrameComplete::String(_, _) => todo!(),
+                    FrameComplete::Vec(_, _) => todo!(),
+                    FrameComplete::Message(_, _) => todo!(),
+                    FrameComplete::KeyShare(key) => key,
+                    FrameComplete::SessionId(_) => todo!(),
                 };
                 let key =
                     <rsa::RsaPublicKey as rsa::pkcs1::DecodeRsaPublicKey>::from_pkcs1_pem(&key)
                         .unwrap();
 
                 //write frame using the KeyShare key (SessionId) signed = false
-                self.write_frame_with_key(&Frame::SessionId(Some(id)), &RsaKey::Public(key), false)
-                    .await?;
+                self.write_frame_with_key(
+                    &FrameComplete::SessionId(Some(id)),
+                    &RsaKey::Public(key),
+                    false,
+                )
+                .await?;
 
                 Ok(self)
             }

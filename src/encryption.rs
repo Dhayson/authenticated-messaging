@@ -5,6 +5,7 @@ use rsa::{errors::Error as RsaError, PaddingScheme, PublicKey, RsaPrivateKey, Rs
 
 use k256::ecdsa::{SigningKey, VerifyingKey};
 
+#[derive(Clone)]
 pub enum RsaKey
 {
     Private(RsaPrivateKey),

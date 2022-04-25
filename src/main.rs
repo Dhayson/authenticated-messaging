@@ -32,7 +32,6 @@ async fn main()
                 if file.ends_with(".verify")
                 {
                     key_ver_list.push(file.to_string());
-                    println!("{}", file);
                 }
             }
         }
@@ -61,37 +60,45 @@ async fn main()
 
             loop
             {
-                let res = con.read_frame().await.unwrap();
-                frame_handler(res, &con);
+                let res = con.read_frame().await;
+                if let Err(err) = frame_handler(res, &con)
+                {
+                    log::log(log::Level::Info, "frame handling failed");
+                    panic!("{}", err);
+                }
             }
         });
     }
 }
 
-fn frame_handler(frame: frame::Frame, con: &frame::Connection)
+fn frame_handler(
+    frame_auth: (std::io::Result<frame::Frame>, bool),
+    con: &frame::Connection,
+) -> std::io::Result<()>
 {
+    let frame = frame_auth.0?;
+    let auth = frame_auth.1;
     match frame
     {
-        frame::Frame::String(s, _) =>
+        frame::Frame::String(s) =>
         {
             log::log(log::Level::Normal, &format!("received string: {}", s));
         }
-        frame::Frame::Vec(vec, _) =>
+        frame::Frame::Vec(vec) =>
         {
             for frame in vec
             {
-                frame_handler(frame, con);
+                frame_handler((Ok(frame), auth), con).ok();
             }
         }
-        frame::Frame::Message(m, sig) =>
+        frame::Frame::Message(m) =>
         {
             m.write_to_file().unwrap();
             log::log(
                 log::Level::Info,
-                &format!("signature is {:?} / status {}", sig, sig == con.session_id),
+                &format!("session id is {:?} / status {}", con.session_id, auth),
             );
         }
-        frame::Frame::KeyShare(_) => panic!("element only used for authentication"),
-        frame::Frame::SessionId(_) => panic!("element only used for authentication"),
     };
+    Ok(())
 }
