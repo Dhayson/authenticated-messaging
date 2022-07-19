@@ -9,3 +9,5 @@ examples/server_prototype.main.rs
 src/connection.rs
 examples/write-and-read.rs
 examples/client-test/target
+examples/hello-redis.rs.txt
+src/connection.rs.txt
