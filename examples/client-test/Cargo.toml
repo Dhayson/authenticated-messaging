@@ -8,11 +8,11 @@ edition = "2021"
 [dependencies]
 tokiorust = {path = "../../"}
 tokio = { version = "1", features = ["full"] }
-#mini-redis = "0.4"
+# mini-redis = "0.4"
 bytes = "1"
 serde = { version = "1.0", features = ["derive"] }
 ron = "0.7"
-rsa = "0.6.0"
+rsa = "0.6.1"
 rand = "0.8.5"
 aes-gcm = "0.9.4"
-k256 = {version ="0.10.4", features = ["serde","ecdsa"]} #not audited
+k256 = {version ="0.11.3", features = ["serde","ecdsa"]} #not audited
