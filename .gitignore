@@ -7,3 +7,5 @@ examples/hello-redis.rs
 examples/echo-server-copy.rs
 examples/server_prototype.main.rs
 src/connection.rs
+examples/write-and-read.rs
+examples/client-test/target

@@ -1,3 +1,4 @@
+
 use rsa::pkcs1::DecodeRsaPublicKey;
 use std::env;
 use std::fs;
@@ -5,11 +6,9 @@ use std::io::stdin;
 use std::net::SocketAddr;
 use tokio::net::TcpStream;
 
-#[path = "../src/main.rs"]
-mod main;
-use main::encryption;
-use main::frame;
-use main::message::Message;
+use tokiorust::encryption;
+use tokiorust::frame;
+use tokiorust::message::Message;
 
 #[tokio::main]
 async fn main()
@@ -33,13 +32,13 @@ async fn main()
     println!("connect completed first with {:?}", stream);
 
     let key =
-        rsa::RsaPublicKey::from_pkcs1_pem(&fs::read_to_string("public.pem").unwrap()).unwrap();
+        rsa::RsaPublicKey::from_pkcs1_pem(&fs::read_to_string("../../public.pem").unwrap()).unwrap();
 
     #[allow(unused_mut)]
     let mut con = frame::Connection::new(
         stream,
         encryption::RsaKey::Public(key),
-        encryption::SignVerify::Sign(encryption::get_sign_key("key.sign").unwrap()),
+        encryption::SignVerify::Sign(encryption::get_sign_key("../../key.sign").unwrap()),
     )
     .authenticate(frame::Auth::Client)
     .await
@@ -60,22 +59,4 @@ async fn main()
             .unwrap()
         );
     }
-    /*
-    let mut stream = TcpStream::connect("127.0.0.1:6142").await?;
-    stream.write_all(b"neymar melhor do mundo").await?;
-
-    let mut buf = vec![];
-    stream.readable().await?;
-    stream.read_buf(&mut buf).await?;
-    println!("{:?}", String::from_utf8(buf));
-
-    let mut stream = TcpStream::connect("127.0.0.1:6142").await?;
-    stream.write_all(b"pele melhor do universo").await?;
-
-    let mut buf2 = vec![];
-    stream.readable().await?;
-    stream.read_buf(&mut buf2).await?;
-    println!("{:?}", String::from_utf8(buf2));
-    */
-    //Ok(())
 }
