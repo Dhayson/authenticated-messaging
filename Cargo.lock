@@ -38,6 +38,20 @@ dependencies = [
 ]
 
 [[package]]
+name = "auth-messaging"
+version = "0.1.0"
+dependencies = [
+ "aes-gcm",
+ "bytes",
+ "k256",
+ "rand",
+ "ron",
+ "rsa",
+ "serde",
+ "tokio",
+]
+
+[[package]]
 name = "autocfg"
 version = "1.1.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -799,20 +813,6 @@ dependencies = [
  "proc-macro2",
  "quote",
  "syn",
-]
-
-[[package]]
-name = "tokiorust"
-version = "0.1.0"
-dependencies = [
- "aes-gcm",
- "bytes",
- "k256",
- "rand",
- "ron",
- "rsa",
- "serde",
- "tokio",
 ]
 
 [[package]]

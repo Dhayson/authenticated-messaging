@@ -6,9 +6,9 @@ use std::io::stdin;
 use std::net::SocketAddr;
 use tokio::net::TcpStream;
 
-use tokiorust::encryption;
-use tokiorust::frame;
-use tokiorust::message::Message;
+use authmessaging::encryption;
+use authmessaging::frame;
+use authmessaging::message::Message;
 
 #[tokio::main]
 async fn main()

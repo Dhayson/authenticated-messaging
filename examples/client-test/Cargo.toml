@@ -6,7 +6,7 @@ edition = "2021"
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
-tokiorust = {path = "../../"}
+auth-messaging = {path = "../../"}
 tokio = { version = "1", features = ["full"] }
 # mini-redis = "0.4"
 bytes = "1"
